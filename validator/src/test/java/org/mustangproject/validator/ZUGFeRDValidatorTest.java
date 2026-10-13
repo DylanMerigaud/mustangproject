@@ -392,4 +392,23 @@ public class ZUGFeRDValidatorTest extends ResourceCase {
 		assertThat(res).valueByXPath("/validation/summary/@status")
 			.isEqualTo("invalid");
 	}
+
+	/***
+	 * a filename with characters that are special in XML still gives a report (#780)
+	 */
+	@Test
+	public void testFilenameIsEscapedInReport() throws Exception {
+		File dir = Files.createTempDirectory("mustang").toFile();
+		File xmlFile = new File(dir, "test&file's.xml");
+		Files.copy(getResourceAsFile("validV2.xml").toPath(), xmlFile.toPath());
+		xmlFile.deleteOnExit();
+		dir.deleteOnExit();
+
+		ZUGFeRDValidator zfv = new ZUGFeRDValidator();
+		String res = zfv.validate(xmlFile.getAbsolutePath());
+		assertThat(res).valueByXPath("/validation/@filename")
+			.isEqualTo("test&file's.xml");
+		assertThat(res).valueByXPath("/validation/summary/@status")
+			.isEqualTo("valid");
+	}
 }
