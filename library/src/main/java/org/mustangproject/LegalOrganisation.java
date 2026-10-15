@@ -50,10 +50,11 @@ public class LegalOrganisation implements IZUGFeRDLegalOrganisation {
 				Node currentItemNode = nodes.item(nodeIndex);
 				if (currentItemNode.getLocalName() != null) {
 					if (currentItemNode.getLocalName().equals("ID")) {
+						SchemedID gid = new SchemedID().setId(currentItemNode.getTextContent());
 						if (currentItemNode.getAttributes().getNamedItem("schemeID") != null) {
-							SchemedID gid = new SchemedID().setScheme(currentItemNode.getAttributes().getNamedItem("schemeID").getNodeValue()).setId(currentItemNode.getTextContent());
-							this.setSchemedID(gid);
+							gid.setScheme(currentItemNode.getAttributes().getNamedItem("schemeID").getNodeValue());
 						}
+						this.setSchemedID(gid);
 					}
 					if (currentItemNode.getLocalName().equals("TradingBusinessName") && currentItemNode.getFirstChild() != null) {
 						setTradingBusinessName(currentItemNode.getFirstChild().getNodeValue());

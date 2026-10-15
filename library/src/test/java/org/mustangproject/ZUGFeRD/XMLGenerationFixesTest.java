@@ -205,6 +205,23 @@ public class XMLGenerationFixesTest {
 	}
 
 	/**
+	 * The ID of a legal organisation without schemeID was dropped on import, so it was missing after a round trip.
+	 */
+	@Test
+	public void testLegalOrganisationWithoutSchemeSurvivesRoundTrip() throws Exception {
+		Invoice invoice = createInvoice();
+		invoice.getSender().setLegalOrganisation(new LegalOrganisation("VR 98765 Nx"));
+
+		ZUGFeRDInvoiceImporter zii = new ZUGFeRDInvoiceImporter();
+		zii.setRawXML(generate(invoice, "EN16931").getBytes(StandardCharsets.UTF_8));
+		String xml = generate(zii.extractInvoice(), "EN16931");
+
+		String sellerID = "//*[local-name()='SellerTradeParty']/*[local-name()='SpecifiedLegalOrganization']/*[local-name()='ID']";
+		assertThat(xml).valueByXPath("string(" + sellerID + ")").isEqualTo("VR 98765 Nx");
+		assertThat(xml).valueByXPath("count(" + sellerID + "/@schemeID)").asInt().isEqualTo(0);
+	}
+
+	/**
 	 * ZUGFeRD 1 and Order-X threw a NullPointerException when there was neither a due date nor a payment terms text.
 	 */
 	@Test
