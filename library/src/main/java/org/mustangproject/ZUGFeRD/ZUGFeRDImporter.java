@@ -371,7 +371,7 @@ public class ZUGFeRDImporter extends ZUGFeRDInvoiceImporter {
 				if (settlement instanceof IZUGFeRDTradeSettlementDebit) {
 					return ((IZUGFeRDTradeSettlementDebit) settlement).getIBAN();
 				}
-				if (settlement instanceof IZUGFeRDTradeSettlementPayment) {
+				if (settlement instanceof IZUGFeRDTradeSettlementPayment && ((IZUGFeRDTradeSettlementPayment) settlement).getOwnIBAN() != null) {
 					return ((IZUGFeRDTradeSettlementPayment) settlement).getOwnIBAN();
 				}
 			}

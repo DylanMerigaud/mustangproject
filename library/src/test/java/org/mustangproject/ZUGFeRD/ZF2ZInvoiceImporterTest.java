@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,6 +50,7 @@ import java.time.ZoneOffset;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import javax.xml.xpath.XPathExpressionException;
@@ -1142,6 +1144,115 @@ public class ZF2ZInvoiceImporterTest extends ResourceCase {
 		String theXML = new String(zf2p.getXML(), StandardCharsets.UTF_8);
 
 		assertTrue(theXML.contains("GB98354"));
+	}
+
+	/***
+	 * @param paymentMeans the SpecifiedTradeSettlementPaymentMeans element(s) to use
+	 * @return test_invoice_note.xml with its payment means replaced by the given one(s)
+	 */
+	private String getInvoiceWithPaymentMeans(String paymentMeans) throws IOException {
+		String xml = Files.readString(getResourceAsFile("test_invoice_note.xml").toPath());
+		String result = xml.replaceFirst("(?s)<ram:SpecifiedTradeSettlementPaymentMeans>.*?</ram:SpecifiedTradeSettlementPaymentMeans>", Matcher.quoteReplacement(paymentMeans));
+		assertNotEquals(xml, result);
+		return result;
+	}
+
+	private Invoice importInvoice(String xml) throws XPathExpressionException, ParseException {
+		ZUGFeRDInvoiceImporter zii = new ZUGFeRDInvoiceImporter();
+		zii.doIgnoreCalculationErrors();
+		zii.fromXML(xml);
+		return zii.extractInvoice();
+	}
+
+	private String exportXRechnung(Invoice invoice) {
+		ZUGFeRD2PullProvider zf2p = new ZUGFeRD2PullProvider();
+		zf2p.setProfile(Profiles.getByName("XRechnung"));
+		zf2p.generateXML(invoice);
+		return new String(zf2p.getXML(), StandardCharsets.UTF_8).replaceAll(">\\s+<", "><");
+	}
+
+	@Test
+	public void testPaymentMeansWithoutAccount() throws XPathExpressionException, ParseException, IOException {
+		String xml = getInvoiceWithPaymentMeans("<ram:SpecifiedTradeSettlementPaymentMeans>"
+			+ "<ram:TypeCode>57</ram:TypeCode>"
+			+ "<ram:Information>Standing agreement</ram:Information>"
+			+ "</ram:SpecifiedTradeSettlementPaymentMeans>");
+		Invoice invoice = importInvoice(xml);
+
+		assertEquals(1, invoice.getSender().getBankDetails().size());
+		BankDetails bd = invoice.getSender().getBankDetails().get(0);
+		assertNull(bd.getIBAN());
+		assertEquals("57", bd.getPaymentMeansCode());
+		assertEquals("Standing agreement", bd.getPaymentMeansInformation());
+
+		assertTrue(exportXRechnung(invoice).contains("<ram:SpecifiedTradeSettlementPaymentMeans>"
+			+ "<ram:TypeCode>57</ram:TypeCode>"
+			+ "<ram:Information>Standing agreement</ram:Information>"
+			+ "</ram:SpecifiedTradeSettlementPaymentMeans>"));
+
+		ZUGFeRDImporter zi = new ZUGFeRDImporter();
+		zi.setRawXML(xml.getBytes(StandardCharsets.UTF_8));
+		assertEquals("", zi.getIBAN());
+	}
+
+	@Test
+	public void testPaymentMeansWithoutAccountAndInformation() throws XPathExpressionException, ParseException, IOException {
+		String[] paymentMeansWithoutInformation = {
+			"<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>10</ram:TypeCode></ram:SpecifiedTradeSettlementPaymentMeans>",
+			"<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>10</ram:TypeCode><ram:Information/></ram:SpecifiedTradeSettlementPaymentMeans>"
+		};
+		for (String paymentMeans : paymentMeansWithoutInformation) {
+			Invoice invoice = importInvoice(getInvoiceWithPaymentMeans(paymentMeans));
+
+			assertEquals(1, invoice.getSender().getBankDetails().size());
+			assertEquals("10", invoice.getSender().getBankDetails().get(0).getPaymentMeansCode());
+			assertNull(invoice.getSender().getBankDetails().get(0).getPaymentMeansInformation());
+
+			String theXML = exportXRechnung(invoice);
+			assertTrue(theXML.contains("<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>10</ram:TypeCode></ram:SpecifiedTradeSettlementPaymentMeans>"));
+			assertFalse(theXML.contains("SEPA credit transfer"));
+		}
+	}
+
+	@Test
+	public void testPaymentMeansWithoutAccountAndTypeCode() throws XPathExpressionException, ParseException, IOException {
+		String[] paymentMeansWithoutTypeCode = {
+			"<ram:SpecifiedTradeSettlementPaymentMeans><ram:Information>Standing agreement</ram:Information></ram:SpecifiedTradeSettlementPaymentMeans>",
+			"<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode/><ram:Information>Standing agreement</ram:Information></ram:SpecifiedTradeSettlementPaymentMeans>"
+		};
+		for (String paymentMeans : paymentMeansWithoutTypeCode) {
+			Invoice invoice = importInvoice(getInvoiceWithPaymentMeans(paymentMeans));
+
+			assertTrue(invoice.getSender().getBankDetails().isEmpty());
+			assertFalse(exportXRechnung(invoice).contains("SpecifiedTradeSettlementPaymentMeans"));
+		}
+	}
+
+	@Test
+	public void testPaymentMeansWithAndWithoutAccount() throws XPathExpressionException, ParseException, IOException {
+		String xml = getInvoiceWithPaymentMeans("<ram:SpecifiedTradeSettlementPaymentMeans>"
+			+ "<ram:TypeCode>57</ram:TypeCode>"
+			+ "<ram:Information>Standing agreement</ram:Information>"
+			+ "</ram:SpecifiedTradeSettlementPaymentMeans>"
+			+ "<ram:SpecifiedTradeSettlementPaymentMeans>"
+			+ "<ram:TypeCode>58</ram:TypeCode>"
+			+ "<ram:PayeePartyCreditorFinancialAccount><ram:IBANID>DE89370400440532013000</ram:IBANID></ram:PayeePartyCreditorFinancialAccount>"
+			+ "</ram:SpecifiedTradeSettlementPaymentMeans>");
+		Invoice invoice = importInvoice(xml);
+
+		assertEquals(2, invoice.getSender().getBankDetails().size());
+		assertNull(invoice.getSender().getBankDetails().get(0).getIBAN());
+		assertEquals("57", invoice.getSender().getBankDetails().get(0).getPaymentMeansCode());
+		assertEquals("DE89370400440532013000", invoice.getSender().getBankDetails().get(1).getIBAN());
+		assertEquals("58", invoice.getSender().getBankDetails().get(1).getPaymentMeansCode());
+
+		String theXML = exportXRechnung(invoice);
+		assertTrue(theXML.contains("<ram:TypeCode>57</ram:TypeCode><ram:Information>Standing agreement</ram:Information></ram:SpecifiedTradeSettlementPaymentMeans>"));
+		assertTrue(theXML.contains("<ram:PayeePartyCreditorFinancialAccount><ram:IBANID>DE89370400440532013000</ram:IBANID></ram:PayeePartyCreditorFinancialAccount>"));
+
+		ZUGFeRDImporter zi = new ZUGFeRDImporter();
+		zi.setRawXML(xml.getBytes(StandardCharsets.UTF_8));
+		assertEquals("DE89370400440532013000", zi.getIBAN());
 	}
 
 	@Test

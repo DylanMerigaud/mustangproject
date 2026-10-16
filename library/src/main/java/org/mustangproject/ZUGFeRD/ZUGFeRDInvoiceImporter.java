@@ -900,6 +900,12 @@ public class ZUGFeRDInvoiceImporter {
 							bd.setAccountName(accountName);
 						}
 						bankDetails.add(bd);
+					} else if (StringUtils.isNotBlank(paymentMeansCode)) {
+						// payment means without an account, e.g. 57 standing agreement or 10 in cash
+						BankDetails bd = new BankDetails();
+						bd.setPaymentMeansCode(paymentMeansCode);
+						bd.setPaymentMeansInformation(StringUtils.isNotBlank(paymentMeansInformation) ? paymentMeansInformation : null);
+						bankDetails.add(bd);
 					}
 				}
 				if (headerTradeSettlementChilds.item(settlementChildIndex).getLocalName() != null
