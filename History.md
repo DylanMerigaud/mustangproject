@@ -29,6 +29,7 @@
 - #1321 Importer: fix payment means, UBL period and creditor reference, Order-X detection.
 - Minor component updates (jackson, apache-fop).
 - #1325 Invoice.getDueDate() does no longer return a cash discount date.
+- #1161 Remove the OSSRH repository from the library and validator poms.
 
 
 2.26.0
